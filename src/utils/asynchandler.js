@@ -15,7 +15,7 @@ export default asyncHandler;
 
  
 // This is an alternative implementation of the asyncHandler function using async/await syntax.
-// const aynchandler = (fn) => async(req,res,next) =>{
+// const asynchandler = (fn) => async(req,res,next) =>{
 //     try{
 //         await fn(req,res,next);
 //     }
