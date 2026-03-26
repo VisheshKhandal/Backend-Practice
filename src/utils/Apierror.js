@@ -23,4 +23,4 @@ class Apierror extends Error {
     }
 }
 
-export default Apierror;
+export {Apierror};
