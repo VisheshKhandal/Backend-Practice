@@ -3,6 +3,21 @@ import {Apierror} from "../utils/Apierror.js";
 import {User} from "../models/user.models.js";
 import {UploadToCloudinary} from "../utils/cloudinary.js"
 import {ApiResponse} from "../utils/ApiResponse.js"
+
+const genrateAccessAndRefreshToken = async (userId) =>{
+    try {
+        const user = await User.findById(userId);
+        const accessToken = user.generateAccessToken();
+        const refreshToken = user.generateRefreshToken();
+
+        user.refreshToken = refreshToken;
+        await user.save({validateBeforeSave : false});
+        return {accessToken, refreshToken};
+
+    } catch (error) {
+        throw new Apierror(500, "Error in genrating Access and Refresh Token");
+    }
+}
 const registerUser  = asyncHandler(async(req,res) => {
 
     const {fullName, email, password, username} = req.body;
@@ -53,7 +68,93 @@ const registerUser  = asyncHandler(async(req,res) => {
     return res.status(200).json(
         new ApiResponse(201, "User Registered Successfully", createdUser));
 });
-export {registerUser};
+
+const loginUser = asyncHandler(async(req,res) => {
+    /**
+     Steps For Login User : 
+     1. req.body se data le aao
+     2. Check for username and email
+     3. Find the User
+     4. password check
+     5. Genrate Access token and Refresh token
+     6. Then to send these tokens to user in terms of Cookies.
+     */
+
+     const {email, password} = req.body;
+     
+     if(!email || !username){
+        throw new Apierror(400, "Email and Password are required");
+     }
+     const user = await User.findOne({
+        $or : [{email}, {username}]
+     })
+     if(!user){
+        throw new Apierror(404, "User not found with this email or username");
+     }
+     const isPasswordValid = await user.isPasswordCorrect(password);
+     if(!isPasswordValid){
+        throw new Apierror(401, "Invalid User Credentials");
+     }
+
+     const{accessToken,refreshToken} = await genrateAccessAndRefreshToken(user._id);
+// Important : we should not send password and refresh token in response
+// we can send access token in response but refresh token should be sent in http only cookie
+     const loggedInUser = await User.findById(user._id).select
+     ("-password -refreshToken");
+
+     const cookieOptions = {
+        httpOnly : true,
+        secure : true,
+     }
+
+     return res
+     .status(200)
+     .cookie("accessToken", accessToken, cookieOptions)
+     .cookie("refreshToken", refreshToken, cookieOptions)
+     .json(
+        new ApiResponse(
+            200,
+            {
+                user : loggedInUser,
+                accessToken,refreshToken
+            },
+            "User Logged In Successfully"
+        )
+     )
+});
+
+const logoutUser = asyncHandler(async(req,res) => {
+    // Steps for Logout User :
+    // 1. Get the user from req.user
+    // 2. Remove the refresh token from database
+    // 3. Clear the cookies from frontend
+    await User.findByIdAndUpdate(req.user._id, 
+    {
+        $set :{
+            refreshToken : undefined,
+        }
+    }, 
+    {new : true});
+    const cookieOptions = {
+        httpOnly : true,
+        secure : true,
+     }
+     return res
+        .status(200)
+        .clearCookie("accessToken", cookieOptions)
+        .clearCookie("refreshToken", cookieOptions)
+        .json(
+            new ApiResponse(200, "User Logged Out Successfully")
+        )
+});
+    
+
+
+export {
+    registerUser,
+    loginUser,
+    logoutUser
+};
   /**
      *  Steps for Registration algo : 
 
@@ -68,3 +169,5 @@ export {registerUser};
      * 9. return result.
      
      **/
+    
+  
