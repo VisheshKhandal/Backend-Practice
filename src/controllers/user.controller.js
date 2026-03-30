@@ -153,7 +153,7 @@ const logoutUser = asyncHandler(async(req,res) => {
     {new : true});
     const cookieOptions = {
         httpOnly : true,
-        secure : false,
+        secure : true,
      }
      return res
         .status(200)
@@ -209,14 +209,121 @@ const refreshAccessToken = asyncHandler(async(req,res) => {
     }
 });
 
+const changeCurrentPassword = asyncHandler(async(req,res) =>{
+    // Steps for Change Current Password :
+    // 1. Get the old password from request body
+    // 2. Get the user from req.user
+    // 3. Check if old password is correct
+    // 4. If correct, update the password with new password
+    const {oldPassword, newPassword} = req.body;
+    const user = await User.findById(req.user._id);
+    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
+    if(!isPasswordCorrect){
+        throw new Apierror(401, "Old Password is Incorrect");
+    }
+    user.password = newPassword;
+    await user.save({validateBeforeSave : false});
+    return res.status(200).json(
+        new ApiResponse(200, "Password Changed Successfully")
+    );
+})
+// Additional Controller to get current user details
+// this can be used in frontend to get the logged in user details using the access token sent in cookies
+const getCurrentUser  = asyncHandler(async(req,res) => {
+    return res.status(200).json(
+        new ApiResponse(200, req.user, "Current User Details Fetched Successfully")
+    );
+})
+
+// Update Account Details Controller can be added here with similar steps as change password but with different fields to update like fullName, avatar, coverImage etc.
+const updateAccountDetails = asyncHandler(async(req,res) => {
+    const {fullName,email} = req.body;
+    if(!fullName && !email){
+        throw new Apierror(400, "At least one field (fullName or email) is required to update");
+    }
+    const user = await User.findByIdAndUpdate(req.user._id,
+        {
+            $set : {
+                fullName,
+                email
+            }
+        },
+        {new  : true}
+    ).select("-password");
+
+    return res.status(200).json(
+        new ApiResponse(200, user, "Account Details Updated Successfully")
+    );
+});
+// Additional Controller to update user avatar can be added here with similar steps as change password but with different fields to update like fullName, avatar, coverImage etc.
+const updateUserAvatar = asyncHandler(async(req,res) => {
+    const avatarLocalPath = req.file?.path;
+    if(!avatarLocalPath){
+        throw new Apierror(400, "Avatar file is required");
+    }
+    const avatar = await UploadToCloudinary(avatarLocalPath);
+    if(!avatar.url){
+        throw new Apierror(500, "Error in uploading avatar to cloudinary");
+    }
+    const user = await User.findByIdAndUpdate(req.user._id,
+        {
+            $set : {
+                avatar : avatar.url
+            }
+        },
+        {new : true}
+    ).select("-password");
+        return res.status(200).json(
+            new ApiResponse(200, user.avatar, "User Avatar Updated Successfully")
+        );
+});
+
+const updateUserCoverImage = asyncHandler(async(req,res) =>{
+    const coverImageLocalPath = req.file?.path
+    if(!coverImageLocalPath){
+        throw new Apierror(400, "Avatar file is  required");
+    }
+    const coverImage = await UploadToCloudinary(coverImageLocalPath);
+    if(!coverImage){
+         throw new Apierror(500, "Error in uploading coverImage to cloudinary");
+    }
+    const user = await User.findByIdAndUpdate(req.user._id,
+        {
+            $set : {
+                coverImage : coverImage.url
+            }
+        },
+        {new : true},
+    ).select("-password");
+    return res.status(200).json(
+        new ApiResponse(200, user.coverImage, "User Cover Image Updated Successfully")
+    );
+})
+
 
 
 export {
     registerUser,
     loginUser,
     logoutUser,
-    refreshAccessToken
+    refreshAccessToken,
+    changeCurrentPassword,
+    getCurrentUser,
+    updateAccountDetails,
+    updateUserAvatar,
+    updateUserCoverImage
 };
+
+
   
     
-  
+/**
+ * Template for Controller :
+ const controllerName = asyncHandler(async (req, res) => {
+    // 1. Get data
+    // 2. Validate
+    // 3. Business logic
+    // 4. DB operation
+    // 5. Response
+});
+ */
